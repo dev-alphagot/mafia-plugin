@@ -1,1 +1,1 @@
-rootProject.name = "hyeon-samples"
+rootProject.name = "mafia-plugin"

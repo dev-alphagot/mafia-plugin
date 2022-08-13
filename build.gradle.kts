@@ -1,7 +1,9 @@
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     kotlin("jvm") version "1.7.0"
+    id("com.github.johnrengelman.shadow") version "7.1.2"
 }
 
 repositories {
@@ -16,11 +18,11 @@ dependencies {
     compileOnly("io.papermc.paper:paper-api:${project.properties["mcVersion"]}-R0.1-SNAPSHOT")
     compileOnly("io.github.monun:tap-api:${project.properties["tapVersion"]}")
     compileOnly("io.github.monun:kommand-api:${project.properties["kommandVersion"]}")
-//    compileOnly("io.github.monun:invfx-api:${project.properties["invfxVersion"]}")
-//    compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:${project.properties["coroutinesVersion"]}")
-//    compileOnly("world.komq:parallel-universe-api:${project.properties["parallelUniverseVersion"]}")
-//    compileOnly("com.sk89q.worldedit:worldedit-bukkit:${"worldeditVersion"}")
+    implementation("com.github.stefvanschie.inventoryframework:IF:0.10.6")
 }
+
+val shade = configurations.create("shade")
+shade.extendsFrom(configurations.implementation.get())
 
 tasks {
     withType<KotlinCompile> {
@@ -32,10 +34,21 @@ tasks {
         }
         filteringCharset = "UTF-8"
     }
-    register<Jar>("outputJar") {
+    register<ShadowJar>("outputJar") {
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
         archiveBaseName.set(project.name)
         archiveClassifier.set("")
         archiveVersion.set("")
+
+        from(
+            shade.map {
+                if (it.isDirectory)
+                    it
+                else
+                    zipTree(it)
+            }
+        )
 
         from(sourceSets["main"].output)
 
@@ -46,10 +59,21 @@ tasks {
             }
         }
     }
-    register<Jar>("paperJar") {
+    register<ShadowJar>("paperJar") {
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
         archiveBaseName.set(project.name)
         archiveClassifier.set("")
-        archiveVersion.set("")
+        archiveVersion.set(project.properties["version"].toString())
+
+        from(
+            shade.map {
+                if (it.isDirectory)
+                    it
+                else
+                    zipTree(it)
+            }
+        )
 
         from(sourceSets["main"].output)
 
