@@ -22,7 +22,16 @@ object MafiaConfig {
     @Config
     var isOnDebug: Boolean = true
 
+    @Config
+    var displayGuide: Boolean = true
+
     fun load(configFile: File) {
-        ConfigSupport.compute(this, configFile)
+        try {
+            ConfigSupport.compute(this, configFile)
+        }
+        catch(_: java.lang.IllegalArgumentException) {
+            getInstance().logger.warning("설정 파일이 올바르지 않습니다. 기본 설정으로 동작합니다.")
+            getInstance().logger.warning("profession-maxes를 설정해주세요.")
+        }
     }
 }
