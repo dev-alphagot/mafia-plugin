@@ -25,6 +25,9 @@ object MafiaConfig {
     @Config
     var displayGuide: Boolean = true
 
+    @Config
+    var autoChangeTimeByGameState: Boolean = true
+
     fun load(configFile: File) {
         try {
             ConfigSupport.compute(this, configFile)

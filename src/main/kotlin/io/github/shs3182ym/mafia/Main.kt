@@ -5,9 +5,13 @@ import com.github.stefvanschie.inventoryframework.gui.type.ChestGui
 import com.github.stefvanschie.inventoryframework.pane.OutlinePane
 import com.github.stefvanschie.inventoryframework.pane.Pane
 import com.github.stefvanschie.inventoryframework.pane.StaticPane
+import io.github.monun.kommand.StringType
+import io.github.monun.kommand.getValue
 import io.github.monun.kommand.kommand
 import io.github.shs3182ym.mafia.config.*
+import io.github.shs3182ym.mafia.config.MafiaConfig.autoChangeTimeByGameState
 import io.github.shs3182ym.mafia.config.MafiaConfig.displayGuide
+import io.github.shs3182ym.mafia.config.MafiaConfig.isOnDebug
 import io.github.shs3182ym.mafia.config.MafiaConfig.load
 import io.github.shs3182ym.mafia.config.MafiaConfig.msgPrefix
 import io.github.shs3182ym.mafia.profession.MafiaProfession
@@ -18,7 +22,6 @@ import net.kyori.adventure.text.format.TextDecoration
 import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
 import net.kyori.adventure.title.Title
-import net.kyori.adventure.title.TitlePart
 import org.bukkit.*
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
@@ -32,13 +35,10 @@ import java.time.Duration
 import java.util.*
 import java.util.function.Consumer
 
+@Suppress("ControlFlowWithEmptyBody")
 class Main : JavaPlugin(), Listener {
     private fun text(t: String): Component = GsonComponentSerializer.gson().deserialize(msgPrefix).append(Component.text(t))
     private fun cmd(t: String): Component = Component.text(t).color(NamedTextColor.LIGHT_PURPLE)
-
-    private fun voteSum(): Int {
-        return voteMap.values.sum()
-    }
 
 
     companion object {
@@ -47,12 +47,12 @@ class Main : JavaPlugin(), Listener {
     }
 
     private val configFile = File(dataFolder, "config.yml")
-    val observers: MutableList<UUID> = mutableListOf()
+    private val observers: MutableList<UUID> = mutableListOf()
 
-    lateinit var randThread: Thread
+    private lateinit var randThread: Thread
 
-    var day = 1
-    var isNight = false
+    private var day = 1
+    private var isNight = false
 
     private var voted: MutableList<UUID> = mutableListOf()
     private var abilityUsed: MutableList<UUID> = mutableListOf()
@@ -64,13 +64,15 @@ class Main : JavaPlugin(), Listener {
 
     @EventHandler
     fun onChat(e: AsyncChatEvent) {
+		if(!isPlaying) return
+	
         if(!e.player.isAlive) {
             e.isCancelled = true
             return
         }
 
         if(e.player.isPlayer()) {
-			logger.info(PlainTextComponentSerializer.plainText().serialize(e.originalMessage()))
+			logger.info("${e.player.name}: ${PlainTextComponentSerializer.plainText().serialize(e.originalMessage())}")
 		
             if(
 				PlainTextComponentSerializer.plainText().serialize(e.originalMessage()).startsWith("투표 ") ||
@@ -139,6 +141,29 @@ class Main : JavaPlugin(), Listener {
             it.isCancelled = true
         }
 
+        object: BukkitRunnable() {
+            override fun run(){
+                if(isPlaying){
+                    server.onlinePlayers.forEach {
+                        if(!it.isAlive) it.gameMode = GameMode.SPECTATOR
+                    }
+
+                    if(autoChangeTimeByGameState){
+                        if(isNight){
+                            server.worlds.forEach {
+                                it.time = 18000
+                            }
+                        }
+                        else {
+                            server.worlds.forEach {
+                                it.time = 6000
+                            }
+                        }
+                    }
+                }
+            }
+        }.runTaskTimer(instance, 0L, 1L)
+
         fun namedItem(s: ItemStack, n: Component = Component.empty(), l: List<Component> = listOf(), o: Consumer<InventoryClickEvent> = ic
         ): GuiItem {
             val st = s.clone()
@@ -164,6 +189,40 @@ class Main : JavaPlugin(), Listener {
                         text("명령어 목록을 보려면 ").append(cmd("/mafia help")).append(Component.text(" 명령어를 사용하세요."))
                     ).forEach (sender::sendMessage)
                 }
+                then("d-sudo"){
+                    requires { isOnDebug }
+                    then("victim" to player()){
+                        then("command" to string(StringType.GREEDY_PHRASE)){
+                            executes {
+                                val victim: Player by it
+                                val command: String by it
+
+                                victim.chat(command)
+                            }
+                        }
+                    }
+                }
+                then("d-freset"){
+                    requires { isOnDebug }
+                    executes {
+                        isPlaying = false
+
+                        day = 0
+                        isNight = false
+
+                        voted.removeAll(voted)
+                        voteMap = mutableMapOf()
+                        abilityUsed.removeAll(abilityUsed)
+                        targetMap = mutableMapOf()
+
+                        server.onlinePlayers.forEach {
+                            it.profession = MafiaProfession.NONE
+                            it.isAlive = false
+                        }
+
+                        sender.sendMessage(text("게임 강제 초기화 완료"))
+                    }
+                }
                 then("help"){
                     executes {
                         arrayOf(
@@ -171,7 +230,11 @@ class Main : JavaPlugin(), Listener {
                             text("").append(cmd("/mafia")).append(Component.text(": 버전 및 개발자를 볼 수 있습니다.")),
                             text("+  ").append(cmd("help")).append(Component.text(": 도움말을 볼 수 있습니다.")),
                             text("+  ").append(cmd("conf-gui")).append(Component.text(": 게임 설정 GUI를 띄웁니다.")),
-                            text("+  ").append(cmd("start")).append(Component.text(": 게임을 시작합니다."))
+                            text("+  ").append(cmd("start")).append(Component.text(": 게임을 시작합니다.")),
+                            text("─".repeat(18)),
+                            text("디버그 모드 전용: "),
+                            text("+  ").append(cmd("d-sudo (플레이어) (명령어)")).append(Component.text(": 플레이어가 강제로 명령을 실행하도록 합니다.")),
+                            text("+  ").append(cmd("d-freset")).append(Component.text(": 게임을 강제로 초기화합니다."))
                         ).forEach (sender::sendMessage)
                     }
                 }
@@ -221,27 +284,54 @@ class Main : JavaPlugin(), Listener {
                         mainPane.addItem(
                             namedItem(
                                 ItemStack(
-                                    if(MafiaConfig.isOnDebug) Material.GREEN_WOOL else Material.RED_WOOL,
+                                    if(displayGuide) Material.GREEN_WOOL else Material.RED_WOOL,
                                 ),
                                 Component.text("가이드").color(NamedTextColor.GRAY),
                                 listOf(
                                     Component.text("가이드: ").color(NamedTextColor.GRAY).append(
-                                        if(MafiaConfig.displayGuide) Component.text("켜짐").color(NamedTextColor.GREEN)
+                                        if(displayGuide) Component.text("켜짐").color(NamedTextColor.GREEN)
                                         else Component.text("꺼짐").color(NamedTextColor.RED)
                                     ),
-                                    Component.text("클릭하여 가이드를 ${if(MafiaConfig.displayGuide) "비" else ""}활성화할 수 있습니다.").color(NamedTextColor.GRAY)
+                                    Component.text("클릭하여 가이드를 ${if(displayGuide) "비" else ""}활성화할 수 있습니다.").color(NamedTextColor.GRAY)
                                 ).map {
                                     it.decoration(TextDecoration.ITALIC, false)
                                 }
                             ) {
-                                MafiaConfig.displayGuide = !MafiaConfig.displayGuide
+                                displayGuide = !displayGuide
 
                                 it.clickedInventory?.close()
                                 if(it.whoClicked is Player) (it.whoClicked as Player).chat("/mafia conf-gui")
 
                                 it.isCancelled = true
                             },
-                            3,
+                            4,
+                            2
+                        )
+
+                        mainPane.addItem(
+                            namedItem(
+                                ItemStack(
+                                    if(MafiaConfig.autoChangeTimeByGameState) Material.GREEN_WOOL else Material.RED_WOOL,
+                                ),
+                                Component.text("낮/밤과 마인크래프트 시간 동기화").color(NamedTextColor.GRAY),
+                                listOf(
+                                    Component.text("낮/밤과 마인크래프트 시간 동기화: ").color(NamedTextColor.GRAY).append(
+                                        if(MafiaConfig.autoChangeTimeByGameState) Component.text("켜짐").color(NamedTextColor.GREEN)
+                                        else Component.text("꺼짐").color(NamedTextColor.RED)
+                                    ),
+                                    Component.text("클릭하여 낮/밤과 마인크래프트 시간 동기화를 ${if(MafiaConfig.autoChangeTimeByGameState) "비" else ""}활성화할 수 있습니다.").color(NamedTextColor.GRAY)
+                                ).map {
+                                    it.decoration(TextDecoration.ITALIC, false)
+                                }
+                            ) {
+                                MafiaConfig.autoChangeTimeByGameState = !MafiaConfig.autoChangeTimeByGameState
+
+                                it.clickedInventory?.close()
+                                if(it.whoClicked is Player) (it.whoClicked as Player).chat("/mafia conf-gui")
+
+                                it.isCancelled = true
+                            },
+                            2,
                             2
                         )
 
@@ -415,8 +505,6 @@ class Main : JavaPlugin(), Listener {
 							it.isAlive = true
 						}
 
-                        player.world.setGameRule(GameRule.DO_DAYLIGHT_CYCLE, false)
-
                         Thread {
                             while(
                                 server.onlinePlayers.count { it.isPlayer() && !it.isInnocent() && it.isAlive } < server.onlinePlayers.count { it.isInnocent() && it.isAlive } ||
@@ -425,7 +513,7 @@ class Main : JavaPlugin(), Listener {
                                 isNight = false
                                 day += 1
 
-                                player.world.time = 6000
+                                // player.world.time = 6000
 
                                 voted.removeAll(voted)
                                 voteMap = mutableMapOf()
@@ -482,22 +570,40 @@ class Main : JavaPlugin(), Listener {
                                         }
 
                                         server.getPlayer(willDead)!!.isAlive = false
-                                        player.chat("/gamemode spectator ${server.getPlayer(willDead)!!.name}")
+                                        // player.chat("/gamemode spectator ${server.getPlayer(willDead)!!.name}")
                                     }
                                 }
 
                                 if(displayGuide) {
                                     server.broadcast(text("채팅에 \"투표 (닉네임)\"이라고 적으면 투표가 가능합니다."))
                                     server.broadcast(text("모두가 투표하면 결과가 발표됩니다. 이후 밤으로 넘어갑니다."))
+                                    server.broadcast(text("득표 수가 제일 높은 사람이 한 사람 이상일 경우 아무도 사형당하지 않습니다."))
                                     server.broadcast(text("이 메시지가 뜨지 않게 하려면 설정에서 \"가이드\"를 비활성화해주세요."))
                                 }
 
-                                while(server.onlinePlayers.count { it.isPlayer() && it.isAlive } > voteSum()){}
+                                while(server.onlinePlayers.count { it.isPlayer() && it.isAlive } > voteMap.values.sum()){}
 
                                 server.broadcast(text("투표가 모두 끝났습니다."))
 
                                 val voteResultThread = Thread ThreadV@{
-                                    val result = voteMap.maxBy { it.value }.key
+                                    val resr = voteMap.maxBy { it.value }
+                                    val result = resr.key
+
+                                    if(voteMap.values.count { it == resr.value } > 1){
+                                        voteMap.forEach {
+                                            server.broadcast(
+                                                text("")
+                                                    .append(server.getPlayer(it.key)!!.displayName())
+                                                    .append(Component.text(": ${it.value}표"))
+                                            )
+
+                                            Thread.sleep(1000L)
+                                        }
+
+                                        Thread.sleep(1750L)
+
+                                        server.broadcast(text("득표 수가 제일 높은 사람이 한 사람 이상이므로 아무도 사형당하지 않습니다."))
+                                    }
 
                                     voteMap.forEach {
                                         server.broadcast(
@@ -512,10 +618,10 @@ class Main : JavaPlugin(), Listener {
                                                 ))
                                         )
 
-                                        Thread.sleep(1500L)
+                                        Thread.sleep(1000L)
                                     }
 
-                                    Thread.sleep(2500L)
+                                    Thread.sleep(1750L)
 
                                     if(server.getPlayer(result)!!.profession == MafiaProfession.JUNSEOK){
                                         server.broadcast(text("").append(server.getPlayer(result)!!.displayName()).append(Component.text(": ")).append(Component.text(MafiaProfession.JUNSEOK.toString()).color(MafiaProfession.JUNSEOK.getColor())).append(Component.text("이라서 죽지 않습니다.")))
@@ -529,7 +635,7 @@ class Main : JavaPlugin(), Listener {
                                         }
 
                                         server.getPlayer(result)!!.isAlive = false
-                                        player.chat("/gamemode spectator ${server.getPlayer(result)!!.name}")
+                                        // player.chat("/gamemode spectator ${server.getPlayer(result)!!.name}")
                                     }
 
                                     return@ThreadV
@@ -543,7 +649,7 @@ class Main : JavaPlugin(), Listener {
                                 abilityUsed.removeAll(abilityUsed)
                                 targetMap = mutableMapOf()
 
-                                player.world.time = 18000
+                                // player.world.time = 18000
 
                                 server.onlinePlayers.forEach {
                                     it.showTitle(
@@ -588,8 +694,6 @@ class Main : JavaPlugin(), Listener {
                             }
 
                             isPlaying = false
-
-                            player.world.setGameRule(GameRule.DO_DAYLIGHT_CYCLE, true)
 						}.start()
                     }
                 }

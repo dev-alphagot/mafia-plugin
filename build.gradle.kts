@@ -15,6 +15,7 @@ repositories {
 @Suppress("GradlePackageUpdate")
 dependencies {
     compileOnly(kotlin("stdlib"))
+    implementation(kotlin("reflect"))
     compileOnly("io.papermc.paper:paper-api:${project.properties["mcVersion"]}-R0.1-SNAPSHOT")
     compileOnly("io.github.monun:tap-api:${project.properties["tapVersion"]}")
     compileOnly("io.github.monun:kommand-api:${project.properties["kommandVersion"]}")
@@ -62,9 +63,16 @@ tasks {
     register<ShadowJar>("paperJar") {
         duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 
+        val file = File("version")
+        val build = file.readText().toInt() + 1
+
+        file.writeText(build.toString())
+
         archiveBaseName.set(project.name)
         archiveClassifier.set("")
-        archiveVersion.set(project.properties["version"].toString())
+        archiveVersion.set("${project.properties["version"]}.${build}")
+
+        project.setProperty("version", "${project.properties["version"]}.${build}")
 
         from(
             shade.map {
