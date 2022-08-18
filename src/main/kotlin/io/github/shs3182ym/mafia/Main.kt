@@ -61,6 +61,10 @@ class Main : JavaPlugin(), Listener {
     private var targetMap = mutableMapOf<MafiaProfession, MutableList<UUID>>()
 
     private var isPlaying: Boolean = false
+	
+	private var voteSum = 0
+
+    private lateinit var gameMainThread: Thread
 
     @EventHandler
     fun onChat(e: AsyncChatEvent) {
@@ -97,24 +101,31 @@ class Main : JavaPlugin(), Listener {
 
                             voted.add(e.player.uniqueId)
                             e.player.sendMessage(text("투표가 완료되었습니다."))
+							
+							voteSum += 1
                         }
                     }
                     "능력" -> {
-                        val text = text.replace("능력 ", "")
+                        if(e.player.isSpecial()){
+                            val text = text.replace("능력 ", "")
 
-                        if(server.onlinePlayers.any { it.name == text }){
-                            if(abilityUsed.contains(e.player.uniqueId)){
-                                e.player.sendMessage(text("이미 능력을 사용했습니다."))
-                                return
+                            if(server.onlinePlayers.any { it.name == text }){
+                                if(abilityUsed.contains(e.player.uniqueId)){
+                                    e.player.sendMessage(text("이미 능력을 사용했습니다."))
+                                    return
+                                }
+
+                                val targetID = server.onlinePlayers.first { it.name == text }.uniqueId
+
+                                if(targetMap.containsKey(e.player.profession)) targetMap[e.player.profession]!!.add(targetID)
+                                else targetMap[e.player.profession] = mutableListOf(targetID)
+
+                                abilityUsed.add(e.player.uniqueId)
+                                e.player.sendMessage(text("능력을 사용했습니다."))
                             }
-
-                            val targetID = server.onlinePlayers.first { it.name == text }.uniqueId
-
-                            if(targetMap.containsKey(e.player.profession)) targetMap[e.player.profession]!!.add(targetID)
-                            else targetMap[e.player.profession] = mutableListOf(targetID)
-
-                            abilityUsed.add(e.player.uniqueId)
-                            e.player.sendMessage(text("능력을 사용했습니다."))
+                        }
+                        else {
+                            e.player.sendMessage(text("능력이 없습니다."))
                         }
                     }
                 }
@@ -168,7 +179,7 @@ class Main : JavaPlugin(), Listener {
         ): GuiItem {
             val st = s.clone()
             val mta = st.itemMeta
-            mta.displayName(n)
+            mta.displayName(n.decoration(TextDecoration.ITALIC, false))
             mta.lore(l)
             st.itemMeta = mta
 
@@ -214,11 +225,15 @@ class Main : JavaPlugin(), Listener {
                         voteMap = mutableMapOf()
                         abilityUsed.removeAll(abilityUsed)
                         targetMap = mutableMapOf()
+						
+						voteSum = 0
 
                         server.onlinePlayers.forEach {
                             it.profession = MafiaProfession.NONE
                             it.isAlive = false
                         }
+
+                        gameMainThread.stop()
 
                         sender.sendMessage(text("게임 강제 초기화 완료"))
                     }
@@ -230,7 +245,7 @@ class Main : JavaPlugin(), Listener {
                             text("").append(cmd("/mafia")).append(Component.text(": 버전 및 개발자를 볼 수 있습니다.")),
                             text("+  ").append(cmd("help")).append(Component.text(": 도움말을 볼 수 있습니다.")),
                             text("+  ").append(cmd("conf-gui")).append(Component.text(": 게임 설정 GUI를 띄웁니다.")),
-                            text("+  ").append(cmd("start")).append(Component.text(": 게임을 시작합니다.")),
+                            text("+  ").append(cmd("start")).append(Component.text(": 게임을 시작합니다.\n")),
                             text("─".repeat(18)),
                             text("디버그 모드 전용: "),
                             text("+  ").append(cmd("d-sudo (플레이어) (명령어)")).append(Component.text(": 플레이어가 강제로 명령을 실행하도록 합니다.")),
@@ -432,7 +447,7 @@ class Main : JavaPlugin(), Listener {
                                 it.playSound(it, Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 1f, 1.615f)
                                 it.showTitle(
                                     Title.title(
-                                        Component.text(it.toString()).color(MafiaProfession.INNOCENT.getColor()),
+                                        Component.text(MafiaProfession.INNOCENT.toString()).color(MafiaProfession.INNOCENT.getColor()),
                                         Component.text("직업 추첨 중!").color(NamedTextColor.GRAY),
                                         Title.Times.times(
                                             Duration.ZERO,
@@ -505,10 +520,10 @@ class Main : JavaPlugin(), Listener {
 							it.isAlive = true
 						}
 
-                        Thread {
+                        gameMainThread = Thread {
                             while(
-                                server.onlinePlayers.count { it.isPlayer() && !it.isInnocent() && it.isAlive } < server.onlinePlayers.count { it.isInnocent() && it.isAlive } ||
-                                server.onlinePlayers.any { it.isPlayer() && !it.isInnocent() && it.isAlive }
+                                server.onlinePlayers.filter { it.isPlayer() && !it.isInnocent() }.count { logger.info(it.toString() + " a"); it.isAlive } < server.onlinePlayers.filter { it.isInnocent() }.count { logger.info(it.toString() + " b"); it.isAlive } ||
+                                server.onlinePlayers.filter { it.isPlayer() && !it.isInnocent() }.any { logger.info(it.toString() + " c"); it.isAlive }
                             ){
                                 isNight = false
                                 day += 1
@@ -535,42 +550,61 @@ class Main : JavaPlugin(), Listener {
                                 }
 
                                 if(day > 1){
-                                    val woowoowoo = targetMap[MafiaProfession.POLICE]!!.random()
+                                    val woowoowoo = targetMap[MafiaProfession.POLICE]?.random()
 
-                                    if(server.getPlayer(woowoowoo)!!.isPlayer() && !server.getPlayer(woowoowoo)!!.isInnocent()){
-                                        server.onlinePlayers.filter { it.profession == MafiaProfession.POLICE }.forEach {
-                                            it.sendMessage(text("").append(server.getPlayer(woowoowoo)!!.displayName()).append(Component.text("님은 마피아로 밝혀졌습니다.")))
+                                    if(woowoowoo != null) {
+                                        if(server.getPlayer(woowoowoo)!!.isPlayer() && !server.getPlayer(woowoowoo)!!.isInnocent()){
+                                            server.onlinePlayers.filter { it.profession == MafiaProfession.POLICE }.forEach {
+                                                it.sendMessage(text("").append(server.getPlayer(woowoowoo)!!.displayName()).append(Component.text("님은 마피아로 밝혀졌습니다.")))
+                                            }
+                                        }
+                                        else {
+                                            server.onlinePlayers.filter { it.profession == MafiaProfession.POLICE }.forEach {
+                                                it.sendMessage(text("").append(server.getPlayer(woowoowoo)!!.displayName()).append(Component.text("님은 무고한 시민으로 밝혀졌습니다.")))
+                                            }
                                         }
                                     }
-                                    else {
-                                        server.onlinePlayers.filter { it.profession == MafiaProfession.POLICE }.forEach {
-                                            it.sendMessage(text("").append(server.getPlayer(woowoowoo)!!.displayName()).append(Component.text("님은 무고한 시민으로 밝혀졌습니다.")))
+
+                                    val willDead = targetMap[MafiaProfession.MAFIA]?.random()
+                                    val willCured = targetMap[MafiaProfession.MEDIC]?.random()
+
+                                    if(willDead != null){
+                                        if(willCured != null){
+                                            if(willDead == willCured){
+                                                server.broadcast(
+                                                    text("전날 밤 마피아의 살해 대상이 되었던 ")
+                                                        .append(server.getPlayer(willDead)!!.displayName())
+                                                        .append(Component.text("님이 기적적으로 살아남았습니다."))
+                                                )
+                                            }
+                                            else {
+                                                server.broadcast(
+                                                    text("전날 밤 마피아의 살해 대상이 되었던 ")
+                                                        .append(server.getPlayer(willDead)!!.displayName())
+                                                        .append(Component.text("님이 오늘 아침 싸늘한 주검으로 발견되었습니다."))
+                                                )
+
+                                                server.onlinePlayers.forEach {
+                                                    it.playSound(it, Sound.ENTITY_PLAYER_DEATH, 1.0f, 1.0f)
+                                                }
+
+                                                server.getPlayer(willDead)!!.isAlive = false
+                                            }
                                         }
-                                    }
+                                        else {
+                                            server.broadcast(
+                                                text("전날 밤 마피아의 살해 대상이 되었던 ")
+                                                    .append(server.getPlayer(willDead)!!.displayName())
+                                                    .append(Component.text("님이 오늘 아침 싸늘한 주검으로 발견되었습니다."))
+                                            )
 
-                                    val willDead = targetMap[MafiaProfession.MAFIA]!!.random()
-                                    val willCured = targetMap[MafiaProfession.MEDIC]!!.random()
+                                            server.onlinePlayers.forEach {
+                                                it.playSound(it, Sound.ENTITY_PLAYER_DEATH, 1.0f, 1.0f)
+                                            }
 
-                                    if(willDead == willCured){
-                                        server.broadcast(
-                                            text("전날 밤 마피아의 살해 대상이 되었던 ")
-                                                .append(server.getPlayer(willDead)!!.displayName())
-                                                .append(Component.text("님이 기적적으로 살아남았습니다."))
-                                        )
-                                    }
-                                    else {
-                                        server.broadcast(
-                                            text("전날 밤 마피아의 살해 대상이 되었던 ")
-                                                .append(server.getPlayer(willDead)!!.displayName())
-                                                .append(Component.text("님이 오늘 아침 싸늘한 주검으로 발견되었습니다."))
-                                        )
-
-                                        server.onlinePlayers.forEach {
-                                            it.playSound(it, Sound.ENTITY_PLAYER_DEATH, 1.0f, 1.0f)
+                                            server.getPlayer(willDead)!!.isAlive = false
+                                            // player.chat("/gamemode spectator ${server.getPlayer(willDead)!!.name}")
                                         }
-
-                                        server.getPlayer(willDead)!!.isAlive = false
-                                        // player.chat("/gamemode spectator ${server.getPlayer(willDead)!!.name}")
                                     }
                                 }
 
@@ -580,10 +614,14 @@ class Main : JavaPlugin(), Listener {
                                     server.broadcast(text("득표 수가 제일 높은 사람이 한 사람 이상일 경우 아무도 사형당하지 않습니다."))
                                     server.broadcast(text("이 메시지가 뜨지 않게 하려면 설정에서 \"가이드\"를 비활성화해주세요."))
                                 }
+								
+								voteSum = 0
 
-                                while(server.onlinePlayers.count { it.isPlayer() && it.isAlive } > voteMap.values.sum()){}
+                                while(server.onlinePlayers.count { it.isPlayer() && it.isAlive } > voteSum){}
 
                                 server.broadcast(text("투표가 모두 끝났습니다."))
+								
+								Thread.sleep(1750L)
 
                                 val voteResultThread = Thread ThreadV@{
                                     val resr = voteMap.maxBy { it.value }
@@ -603,6 +641,8 @@ class Main : JavaPlugin(), Listener {
                                         Thread.sleep(1750L)
 
                                         server.broadcast(text("득표 수가 제일 높은 사람이 한 사람 이상이므로 아무도 사형당하지 않습니다."))
+										
+										return@ThreadV
                                     }
 
                                     voteMap.forEach {
@@ -644,6 +684,12 @@ class Main : JavaPlugin(), Listener {
                                 voteResultThread.start()
 
                                 while(voteResultThread.state != Thread.State.TERMINATED){}
+								
+								if(((server.onlinePlayers.filter { it.isPlayer() && !it.isInnocent() }.map { logger.info(it.toString() + " a"); it }.count { it.isAlive } >= server.onlinePlayers.filter { it.isInnocent() }.map { logger.info(it.toString() + " b"); it }.count { it.isAlive }) 
+								||
+                                server.onlinePlayers.filter { it.isPlayer() && !it.isInnocent() }.map { logger.info(it.toString() + " c"); it }.none { it.isAlive })){
+									break
+								}
 
                                 isNight = true
                                 abilityUsed.removeAll(abilityUsed)
@@ -677,7 +723,7 @@ class Main : JavaPlugin(), Listener {
                                 while(abilityUsed.size < server.onlinePlayers.count { it.isSpecial() }){}
                             }
 
-                            if(server.onlinePlayers.none { it.isPlayer() && !it.isInnocent() && it.isAlive }){
+                            if(server.onlinePlayers.filter { it.isPlayer() && !it.isInnocent() }.none { it.isAlive }){
                                 server.broadcast(text("마피아가 다 죽었으므로 시민 팀의 승리입니다!"))
                             }
                             else {
@@ -694,7 +740,9 @@ class Main : JavaPlugin(), Listener {
                             }
 
                             isPlaying = false
-						}.start()
+						}
+
+                        gameMainThread.start()
                     }
                 }
             }

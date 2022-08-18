@@ -46,7 +46,9 @@ fun getMaxProfessionCountUnspecified(p: MafiaProfession, c: Int): Int = when(p){
     else -> -1
 }
 
-fun Player.isInnocent(): Boolean {
+fun Player?.isInnocent(): Boolean {
+    if(this == null) return false
+
     return arrayOf(
         MEDIC,
         POLICE,
@@ -55,14 +57,18 @@ fun Player.isInnocent(): Boolean {
     ).contains(this.profession)
 }
 
-fun Player.isPlayer(): Boolean {
-    return !arrayOf(
+fun Player?.isPlayer(): Boolean {
+    if(this == null) return false
+
+    return !(arrayOf(
         OBSERVER,
         NONE
-    ).contains(this.profession)
+    ).contains(this.profession))
 }
 
-fun Player.isSpecial(): Boolean {
+fun Player?.isSpecial(): Boolean {
+    if(this == null) return false
+
     return arrayOf(
         MEDIC,
         POLICE,

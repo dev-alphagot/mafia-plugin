@@ -1,7 +1,7 @@
 name: $pluginName
 main: $pluginMain
 api-version: "1.19"
-version: $version
+version: $version + "." + $build
 libraries:
   - io.github.monun:kommand-core:$kommandVersion
   - io.github.monun:tap-core:$tapVersion
