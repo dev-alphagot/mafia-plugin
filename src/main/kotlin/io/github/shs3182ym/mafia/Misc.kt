@@ -76,4 +76,4 @@ fun Player?.isSpecial(): Boolean {
     ).contains(this.profession)
 }
 
-fun getMaxProfessionCount(p: MafiaProfession, c: Int): Int = MafiaConfig.professionMaxes[p] ?: getMaxProfessionCountUnspecified(p, c)
+fun getMaxProfessionCount(p: MafiaProfession, c: Int): Int = getMaxProfessionCountUnspecified(p, c)

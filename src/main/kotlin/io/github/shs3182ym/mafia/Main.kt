@@ -8,6 +8,7 @@ import com.github.stefvanschie.inventoryframework.pane.StaticPane
 import io.github.monun.kommand.StringType
 import io.github.monun.kommand.getValue
 import io.github.monun.kommand.kommand
+import io.github.monun.tap.util.updateFromGitHubMagically
 import io.github.shs3182ym.mafia.config.*
 import io.github.shs3182ym.mafia.config.MafiaConfig.autoChangeTimeByGameState
 import io.github.shs3182ym.mafia.config.MafiaConfig.displayGuide
@@ -34,6 +35,7 @@ import java.io.File
 import java.time.Duration
 import java.util.*
 import java.util.function.Consumer
+import kotlin.Comparator
 
 @Suppress("ControlFlowWithEmptyBody")
 class Main : JavaPlugin(), Listener {
@@ -76,9 +78,7 @@ class Main : JavaPlugin(), Listener {
         }
 
         if(e.player.isPlayer()) {
-			logger.info("${e.player.name}: ${PlainTextComponentSerializer.plainText().serialize(e.originalMessage())}")
-		
-            if(
+			if(
 				PlainTextComponentSerializer.plainText().serialize(e.originalMessage()).startsWith("투표 ") ||
 				PlainTextComponentSerializer.plainText().serialize(e.originalMessage()).startsWith("능력 ")
 			){
@@ -90,7 +90,7 @@ class Main : JavaPlugin(), Listener {
                     "투표" -> {
                         val text = text.replace("투표 ", "")
 
-                        if(server.onlinePlayers.any { it.name == text }){
+                        if(server.onlinePlayers.any { it.name.lowercase() == text.lowercase() }){
                             if(voted.contains(e.player.uniqueId)){
                                 e.player.sendMessage(text("이미 투표를 했습니다."))
                                 return
@@ -104,12 +104,15 @@ class Main : JavaPlugin(), Listener {
 							
 							voteSum += 1
                         }
+                        else {
+                            e.player.sendMessage(text("해당하는 플레이어를 찾을 수 없습니다."))
+                        }
                     }
                     "능력" -> {
                         if(e.player.isSpecial()){
                             val text = text.replace("능력 ", "")
 
-                            if(server.onlinePlayers.any { it.name == text }){
+                            if(server.onlinePlayers.any { it.name.lowercase() == text.lowercase() }){
                                 if(abilityUsed.contains(e.player.uniqueId)){
                                     e.player.sendMessage(text("이미 능력을 사용했습니다."))
                                     return
@@ -122,6 +125,9 @@ class Main : JavaPlugin(), Listener {
 
                                 abilityUsed.add(e.player.uniqueId)
                                 e.player.sendMessage(text("능력을 사용했습니다."))
+                            }
+                            else {
+                                e.player.sendMessage(text("해당하는 플레이어를 찾을 수 없습니다."))
                             }
                         }
                         else {
@@ -142,9 +148,15 @@ class Main : JavaPlugin(), Listener {
         }
     }
 
+    override fun onDisable() {
+        MafiaConfig.save(configFile)
+    }
+
     override fun onEnable() {
         instance = this
         load(configFile)
+
+        this.updateFromGitHubMagically("shs3182ym", "mafia-plugin", "mafia-plugin.jar", logger::info)
 		
 		server.pluginManager.registerEvents(instance, instance)
 
@@ -272,7 +284,7 @@ class Main : JavaPlugin(), Listener {
                         mainPane.addItem(
                             namedItem(
                                 ItemStack(
-                                    if(MafiaConfig.isOnDebug) Material.GREEN_WOOL else Material.RED_WOOL,
+                                    if(MafiaConfig.isOnDebug) Material.LIME_WOOL else Material.RED_WOOL,
                                 ),
                                 Component.text("디버그 모드").color(NamedTextColor.GRAY),
                                 listOf(
@@ -292,14 +304,14 @@ class Main : JavaPlugin(), Listener {
 
                                 it.isCancelled = true
                             },
-                            3,
+                            2,
                             0
                         )
 
                         mainPane.addItem(
                             namedItem(
                                 ItemStack(
-                                    if(displayGuide) Material.GREEN_WOOL else Material.RED_WOOL,
+                                    if(displayGuide) Material.LIME_WOOL else Material.RED_WOOL,
                                 ),
                                 Component.text("가이드").color(NamedTextColor.GRAY),
                                 listOf(
@@ -326,7 +338,7 @@ class Main : JavaPlugin(), Listener {
                         mainPane.addItem(
                             namedItem(
                                 ItemStack(
-                                    if(MafiaConfig.autoChangeTimeByGameState) Material.GREEN_WOOL else Material.RED_WOOL,
+                                    if(MafiaConfig.autoChangeTimeByGameState) Material.LIME_WOOL else Material.RED_WOOL,
                                 ),
                                 Component.text("낮/밤과 마인크래프트 시간 동기화").color(NamedTextColor.GRAY),
                                 listOf(
@@ -350,6 +362,33 @@ class Main : JavaPlugin(), Listener {
                             2
                         )
 
+                        mainPane.addItem(
+                            namedItem(
+                                ItemStack(
+                                    if(MafiaConfig.isOnStream) Material.LIME_WOOL else Material.RED_WOOL,
+                                ),
+                                Component.text("스트리밍 모드").color(NamedTextColor.GRAY),
+                                listOf(
+                                    Component.text("스트리밍 모드: ").color(NamedTextColor.GRAY).append(
+                                        if(MafiaConfig.isOnStream) Component.text("켜짐").color(NamedTextColor.GREEN)
+                                        else Component.text("꺼짐").color(NamedTextColor.RED)
+                                    ),
+                                    Component.text("클릭하여 스트리밍 모드를 ${if(MafiaConfig.isOnStream) "비" else ""}활성화할 수 있습니다.").color(NamedTextColor.GRAY)
+                                ).map {
+                                    it.decoration(TextDecoration.ITALIC, false)
+                                }
+                            ) {
+                                MafiaConfig.isOnStream = !MafiaConfig.isOnStream
+
+                                it.clickedInventory?.close()
+                                if(it.whoClicked is Player) (it.whoClicked as Player).chat("/mafia conf-gui")
+
+                                it.isCancelled = true
+                            },
+                            4,
+                            0
+                        )
+
                         gui.addPane(bg)
                         gui.addPane(mainPane)
 
@@ -370,29 +409,11 @@ class Main : JavaPlugin(), Listener {
                         var players = server.onlinePlayers.filter { it.profession == MafiaProfession.NONE }.shuffled()
                         val playerCount = players.size
 
-                        server.broadcast(text("직업 추첨을 시작합니다."))
+                        server.onlinePlayers.forEach {
+                            it.profession = MafiaProfession.NONE
+                        }
 
-                        val titleTask = object: BukkitRunnable() {
-                            override fun run() {
-                                server.onlinePlayers.filter { it.profession != MafiaProfession.OBSERVER }.forEach {
-                                    it.showTitle(
-                                        Title.title(
-                                            Component.empty(),
-                                            Component.text("직업 추첨 중!").color(NamedTextColor.GRAY),
-                                            Title.Times.times(
-                                                Duration.ZERO,
-                                                Duration.ofMillis(50L * 22L),
-                                                Duration.ZERO
-                                            )
-                                        )
-                                    )
-                                }
-                            }
-                        }.runTaskTimer(
-                            instance,
-                            0L,
-                            20L
-                        )
+                        server.broadcast(text("직업 추첨을 시작합니다."))
 
                         randThread = Thread {
                             Thread.sleep(3000)
@@ -410,7 +431,7 @@ class Main : JavaPlugin(), Listener {
                                     players[i].showTitle(
                                         Title.title(
                                             Component.text(it.toString()).color(it.getColor()),
-                                            Component.text("직업 추첨 중!").color(NamedTextColor.GRAY),
+                                            Component.text(""),
                                             Title.Times.times(
                                                 Duration.ZERO,
                                                 Duration.ofMillis(50L * 50L),
@@ -421,7 +442,7 @@ class Main : JavaPlugin(), Listener {
 
                                     logger.info(players[i].profession.toString())
 
-                                    Thread.sleep(2000)
+                                    Thread.sleep(750)
                                 }
 
                                 players = server.onlinePlayers.filter { it.profession == MafiaProfession.NONE }
@@ -448,7 +469,7 @@ class Main : JavaPlugin(), Listener {
                                 it.showTitle(
                                     Title.title(
                                         Component.text(MafiaProfession.INNOCENT.toString()).color(MafiaProfession.INNOCENT.getColor()),
-                                        Component.text("직업 추첨 중!").color(NamedTextColor.GRAY),
+                                        Component.text(""),
                                         Title.Times.times(
                                             Duration.ZERO,
                                             Duration.ofMillis(50L * 50L),
@@ -458,15 +479,9 @@ class Main : JavaPlugin(), Listener {
                                 )
 
                                 logger.info(it.profession.toString())
-
-                                Thread.sleep(1500L)
                             }
 
-                            titleTask.cancel()
-
                             server.broadcast(text("직업 추첨이 끝났습니다."))
-
-                            logger.info(server.onlinePlayers.joinToString(" ") { it.profession.toString() })
 
                             return@Thread
                         }
@@ -474,8 +489,8 @@ class Main : JavaPlugin(), Listener {
                         randThread.start()
 
                         while(randThread.state != Thread.State.TERMINATED){}
-						
-						var fl = false
+
+                        var fl = false
 
                         MafiaProfession.values().filter { it != MafiaProfession.NONE && it != MafiaProfession.OBSERVER && it != MafiaProfession.INNOCENT && it != MafiaProfession.JUNSEOK }.forEach { prof ->
                             server.onlinePlayers.filter { it.profession == prof }.forEach { pl ->
@@ -491,11 +506,11 @@ class Main : JavaPlugin(), Listener {
                                             }
 
                                             if(lis.isEmpty()){
-												fl = true
-											}
-											else {
-												lis.removeLast()
-											}
+                                                fl = true
+                                            }
+                                            else {
+                                                lis.removeLast()
+                                            }
 
                                             lis.forEach {
                                                 comp = comp.append(it)
@@ -515,20 +530,17 @@ class Main : JavaPlugin(), Listener {
                         voteMap = mutableMapOf()
                         abilityUsed.removeAll(abilityUsed)
                         targetMap = mutableMapOf()
-						
-						server.onlinePlayers.filter { it.profession != MafiaProfession.OBSERVER && it.profession != MafiaProfession.NONE }.forEach {
-							it.isAlive = true
-						}
+
+                        server.onlinePlayers.filter { it.profession != MafiaProfession.OBSERVER && it.profession != MafiaProfession.NONE }.forEach {
+                            it.isAlive = true
+                        }
 
                         gameMainThread = Thread {
                             while(
-                                server.onlinePlayers.filter { it.isPlayer() && !it.isInnocent() }.count { logger.info(it.toString() + " a"); it.isAlive } < server.onlinePlayers.filter { it.isInnocent() }.count { logger.info(it.toString() + " b"); it.isAlive } ||
-                                server.onlinePlayers.filter { it.isPlayer() && !it.isInnocent() }.any { logger.info(it.toString() + " c"); it.isAlive }
+                                true
                             ){
                                 isNight = false
                                 day += 1
-
-                                // player.world.time = 6000
 
                                 voted.removeAll(voted)
                                 voteMap = mutableMapOf()
@@ -603,9 +615,13 @@ class Main : JavaPlugin(), Listener {
                                             }
 
                                             server.getPlayer(willDead)!!.isAlive = false
-                                            // player.chat("/gamemode spectator ${server.getPlayer(willDead)!!.name}")
                                         }
                                     }
+                                }
+
+                                if(!(server.onlinePlayers.filter { it.isPlayer() && !it.isInnocent() }.count { it.isAlive } < (server.onlinePlayers.filter { it.isInnocent() }.count { it.isAlive } - 1) &&
+                                            server.onlinePlayers.filter { it.isPlayer() && !it.isInnocent() }.any { it.isAlive })){
+                                    break
                                 }
 
                                 if(displayGuide) {
@@ -614,14 +630,14 @@ class Main : JavaPlugin(), Listener {
                                     server.broadcast(text("득표 수가 제일 높은 사람이 한 사람 이상일 경우 아무도 사형당하지 않습니다."))
                                     server.broadcast(text("이 메시지가 뜨지 않게 하려면 설정에서 \"가이드\"를 비활성화해주세요."))
                                 }
-								
-								voteSum = 0
+
+                                voteSum = 0
 
                                 while(server.onlinePlayers.count { it.isPlayer() && it.isAlive } > voteSum){}
 
                                 server.broadcast(text("투표가 모두 끝났습니다."))
-								
-								Thread.sleep(1750L)
+
+                                Thread.sleep(1750L)
 
                                 val voteResultThread = Thread ThreadV@{
                                     val resr = voteMap.maxBy { it.value }
@@ -641,8 +657,8 @@ class Main : JavaPlugin(), Listener {
                                         Thread.sleep(1750L)
 
                                         server.broadcast(text("득표 수가 제일 높은 사람이 한 사람 이상이므로 아무도 사형당하지 않습니다."))
-										
-										return@ThreadV
+
+                                        return@ThreadV
                                     }
 
                                     voteMap.forEach {
@@ -675,7 +691,6 @@ class Main : JavaPlugin(), Listener {
                                         }
 
                                         server.getPlayer(result)!!.isAlive = false
-                                        // player.chat("/gamemode spectator ${server.getPlayer(result)!!.name}")
                                     }
 
                                     return@ThreadV
@@ -684,18 +699,16 @@ class Main : JavaPlugin(), Listener {
                                 voteResultThread.start()
 
                                 while(voteResultThread.state != Thread.State.TERMINATED){}
-								
-								if(((server.onlinePlayers.filter { it.isPlayer() && !it.isInnocent() }.map { logger.info(it.toString() + " a"); it }.count { it.isAlive } >= server.onlinePlayers.filter { it.isInnocent() }.map { logger.info(it.toString() + " b"); it }.count { it.isAlive }) 
-								||
-                                server.onlinePlayers.filter { it.isPlayer() && !it.isInnocent() }.map { logger.info(it.toString() + " c"); it }.none { it.isAlive })){
-									break
-								}
+
+                                if(((server.onlinePlayers.filter { it.isPlayer() && !it.isInnocent() }.count { it.isAlive } >= server.onlinePlayers.filter { it.isInnocent() }.count { it.isAlive })
+                                            ||
+                                            server.onlinePlayers.filter { it.isPlayer() && !it.isInnocent() }.none { it.isAlive })){
+                                    break
+                                }
 
                                 isNight = true
                                 abilityUsed.removeAll(abilityUsed)
                                 targetMap = mutableMapOf()
-
-                                // player.world.time = 18000
 
                                 server.onlinePlayers.forEach {
                                     it.showTitle(
@@ -720,7 +733,7 @@ class Main : JavaPlugin(), Listener {
                                     server.broadcast(text("이 메시지가 뜨지 않게 하려면 설정에서 \"가이드\"를 비활성화해주세요."))
                                 }
 
-                                while(abilityUsed.size < server.onlinePlayers.count { it.isSpecial() }){}
+                                while(abilityUsed.size < server.onlinePlayers.count { it.isSpecial() && it.isAlive }){}
                             }
 
                             if(server.onlinePlayers.filter { it.isPlayer() && !it.isInnocent() }.none { it.isAlive }){
@@ -740,7 +753,24 @@ class Main : JavaPlugin(), Listener {
                             }
 
                             isPlaying = false
-						}
+
+                            day = 0
+                            isNight = false
+
+                            voted.removeAll(voted)
+                            voteMap = mutableMapOf()
+                            abilityUsed.removeAll(abilityUsed)
+                            targetMap = mutableMapOf()
+
+                            voteSum = 0
+
+                            server.onlinePlayers.forEach {
+                                it.profession = MafiaProfession.NONE
+                                it.isAlive = false
+                            }
+                        }
+
+                        gameMainThread.name = "마피아 게임 처리 스레드"
 
                         gameMainThread.start()
                     }

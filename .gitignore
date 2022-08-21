@@ -14,3 +14,4 @@ out/
 server-script.sh
 wget-log
 server-script.sh
+*.sh

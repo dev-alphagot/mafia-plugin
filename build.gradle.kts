@@ -35,10 +35,12 @@ tasks {
 
         file.writeText(build.toString())
 
-        project.setProperty("build", "$build")
+        val mmap = project.properties.toMutableMap()
+
+        mmap["version"] = "${mmap["version"]}r$build"
 
         filesMatching("**/*.yml") {
-            expand(project.properties)
+            expand(mmap)
         }
         filteringCharset = "UTF-8"
     }

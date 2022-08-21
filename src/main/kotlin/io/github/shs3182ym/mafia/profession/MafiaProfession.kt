@@ -29,7 +29,7 @@ enum class MafiaProfession {
 
                 if(MafiaConfig.isOnDebug) getInstance().logger.info("$rni")
 
-                if(rni == 0) "${ChatColor.STRIKETHROUGH}이준석${ChatColor.RESET}정치인"
+                if(rni == 0 && !MafiaConfig.isOnStream) "${ChatColor.STRIKETHROUGH}이준석${ChatColor.RESET}정치인"
                 else "정치인"
             }
             OBSERVER -> "관전자"
