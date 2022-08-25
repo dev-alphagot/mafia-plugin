@@ -1,21 +1,24 @@
-# Hyeon Samples - Paper
+# 마피아 플러그인
+## 지원하는 버전
+~ 1.19 (1.19에서만 테스트)
 
-## Environment
+## 명령어
+``/mafia``로 확인 가능합니다.
 
-- [Paper 1.19](https://papermc.io/downloads) dependencies
-- [Tap](https://github.com/monun/tap) dependencies
-- [Kommand](https://github.com/monun/kommand/) dependencies
-- [InvFX](https://github.com/monun/invfx/) depenedencies (OPTIONAL)
-- [kotlinx.coroutines](https://github.com/Kotlin/kotlinx.coroutines/) dependencies (OPTIONAL)
-- [Heartbeat Coroutines](https://github.com/monun/heartbeat-coroutines/) dependencies (OPTIONAL)
-- [Server Script](https://github.com/monun/server-script) / Using [aroxu's GoLang version](https://github.com/aroxu/server-script/)
+## 현재 있는 직업
+### 마피아 진영
+* 마피아
+### 시민 진영
+* 의사
+* 경찰
+* 정치인
+* 시민
 
-### This Project Requires:
+## 추가 예정인 직업
+### 마피아 진영
+* 포주
+### 시민 진영
+* 연인
 
-- [JDK 17](https://docs.aws.amazon.com/corretto/latest/corretto-17-ug/downloads-list.html) (Corretto JDK is Recommended.)
-- libarchive-tools package (on Linux|Shell, for [./server-script.sh](./server-script.sh))
-
-### Special Thanks:
-
-- [monun](https://github.com/monun)
-- [JetBrains](https://jetbrains.com/)
+## 추가 예정인 기능
+* 디스코드 통화방 연동 (자동으로 마이크 켜고 끄기)
