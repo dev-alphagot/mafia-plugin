@@ -13,11 +13,13 @@ import io.github.shs3182ym.mafia.config.*
 import io.github.shs3182ym.mafia.config.MafiaConfig.autoChangeTimeByGameState
 import io.github.shs3182ym.mafia.config.MafiaConfig.displayGuide
 import io.github.shs3182ym.mafia.config.MafiaConfig.isOnDebug
+import io.github.shs3182ym.mafia.config.MafiaConfig.isOnStream
 import io.github.shs3182ym.mafia.config.MafiaConfig.load
 import io.github.shs3182ym.mafia.config.MafiaConfig.msgPrefix
 import io.github.shs3182ym.mafia.profession.MafiaProfession
 import io.papermc.paper.event.player.AsyncChatEvent
 import net.kyori.adventure.text.Component
+import net.kyori.adventure.text.event.ClickEvent
 import net.kyori.adventure.text.format.NamedTextColor
 import net.kyori.adventure.text.format.TextDecoration
 import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer
@@ -40,7 +42,12 @@ import kotlin.Comparator
 @Suppress("ControlFlowWithEmptyBody")
 class Main : JavaPlugin(), Listener {
     private fun text(t: String): Component = GsonComponentSerializer.gson().deserialize(msgPrefix).append(Component.text(t))
-    private fun cmd(t: String): Component = Component.text(t).color(NamedTextColor.LIGHT_PURPLE)
+    private fun cmd(t: String): Component = Component.text(t).color(NamedTextColor.LIGHT_PURPLE).clickEvent(
+        ClickEvent.suggestCommand(
+            if(t.startsWith("/")) t
+            else "/mafia $t"
+        )
+    )
 
 
     companion object {
@@ -74,6 +81,11 @@ class Main : JavaPlugin(), Listener {
 	
         if(!e.player.isAlive) {
             e.isCancelled = true
+
+            server.onlinePlayers.filter { !it.isAlive }.forEach {
+                it.sendMessage(Component.text("<").append(e.player.displayName()).append(Component.text("> ")).append(e.originalMessage()))
+            }
+
             return
         }
 
@@ -207,8 +219,19 @@ class Main : JavaPlugin(), Listener {
             register("mafia"){
                 executes {
                     arrayOf(
-                        text("마피아 플러그인 버전 ${instance.description.version}"),
-                        text(" by AlphaGot#0388"),
+                        text("마피아 플러그인 버전 ${instance.description.version} by AlphaGot${if(!isOnStream) "#0388" else ""} ")
+                            .append(Component.text("(shs3182ym)").clickEvent(
+                                ClickEvent.openUrl(
+                                    "https://github.com/shs3182ym"
+                                )
+                            )),
+                        text("이 플러그인은 GNU GPLv3 라이선스를 따릅니다. 자세한 내용은 ")
+                            .append(Component.text("GitHub 레포지토리").clickEvent(
+                                ClickEvent.openUrl(
+                                    "https://github.com/shs3182ym/mafia-plugin"
+                                )
+                            ))
+                            .append(Component.text("를 참조해주세요.")),
                         text("명령어 목록을 보려면 ").append(cmd("/mafia help")).append(Component.text(" 명령어를 사용하세요."))
                     ).forEach (sender::sendMessage)
                 }
@@ -252,17 +275,30 @@ class Main : JavaPlugin(), Listener {
                 }
                 then("help"){
                     executes {
-                        arrayOf(
-                            text("도움말 (1/1)"),
-                            text("").append(cmd("/mafia")).append(Component.text(": 버전 및 개발자를 볼 수 있습니다.")),
-                            text("+  ").append(cmd("help")).append(Component.text(": 도움말을 볼 수 있습니다.")),
-                            text("+  ").append(cmd("conf-gui")).append(Component.text(": 게임 설정 GUI를 띄웁니다.")),
-                            text("+  ").append(cmd("start")).append(Component.text(": 게임을 시작합니다.\n")),
-                            text("─".repeat(18)),
-                            text("디버그 모드 전용: "),
-                            text("+  ").append(cmd("d-sudo (플레이어) (명령어)")).append(Component.text(": 플레이어가 강제로 명령을 실행하도록 합니다.")),
-                            text("+  ").append(cmd("d-freset")).append(Component.text(": 게임을 강제로 초기화합니다."))
-                        ).forEach (sender::sendMessage)
+                        val helpMsg = if(isOnStream){
+                            arrayOf(
+                                text("도움말 (1/1)"),
+                                text("").append(cmd("/mafia")).append(Component.text(": 버전 및 개발자를 볼 수 있습니다.")),
+                                text("+  ").append(cmd("help")).append(Component.text(": 도움말을 볼 수 있습니다.")),
+                                text("+  ").append(cmd("conf-gui")).append(Component.text(": 게임 설정 GUI를 띄웁니다.")),
+                                text("+  ").append(cmd("start")).append(Component.text(": 게임을 시작합니다.\n"))
+                            )
+                        }
+                        else {
+                            arrayOf(
+                                text("도움말 (1/1)"),
+                                text("").append(cmd("/mafia")).append(Component.text(": 버전 및 개발자를 볼 수 있습니다.")),
+                                text("+  ").append(cmd("help")).append(Component.text(": 도움말을 볼 수 있습니다.")),
+                                text("+  ").append(cmd("conf-gui")).append(Component.text(": 게임 설정 GUI를 띄웁니다.")),
+                                text("+  ").append(cmd("start")).append(Component.text(": 게임을 시작합니다.\n")),
+                                text("─".repeat(18)),
+                                text("디버그 모드 전용: "),
+                                text("+  ").append(cmd("d-sudo (플레이어) (명령어)")).append(Component.text(": 플레이어가 강제로 명령을 실행하도록 합니다.")),
+                                text("+  ").append(cmd("d-freset")).append(Component.text(": 게임을 강제로 초기화합니다."))
+                            )
+                        }
+
+                        helpMsg.forEach (sender::sendMessage)
                     }
                 }
                 then("conf-gui"){
