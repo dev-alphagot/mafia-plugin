@@ -15,7 +15,9 @@ enum class MafiaProfession {
     MEDIC,
     POLICE,
     JUNSEOK, // 정치인
-    OBSERVER;
+    OBSERVER,
+    COUPLE,
+    POJU; // 포주
 
     override fun toString(): String {
         return when(this){
@@ -33,6 +35,8 @@ enum class MafiaProfession {
                 else "정치인"
             }
             OBSERVER -> "관전자"
+            COUPLE -> "연인"
+            POJU -> "포주"
         }
     }
 
@@ -45,6 +49,10 @@ enum class MafiaProfession {
             POLICE -> TextColor.color(44, 44, 222)
             JUNSEOK -> TextColor.color(0xE61E2B)
             OBSERVER -> NamedTextColor.WHITE
+            COUPLE -> TextColor.color(255, 192, 203)
+            POJU -> TextColor.color(199, 21, 133)
+            
+            else -> NamedTextColor.WHITE
         }
     }
 }
