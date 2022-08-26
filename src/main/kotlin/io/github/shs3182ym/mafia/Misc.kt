@@ -27,7 +27,7 @@ var Player.isAlive: Boolean
         playerAliveStorage[this.uniqueId] = value
     }
 
-fun getMaxProfessionCountUnspecified(p: MafiaProfession, c: Int): Int = when(p){
+fun getMaxProfessionCount(p: MafiaProfession, c: Int): Int = when(p){
     MAFIA -> {
         when(c){
             in 0..6 -> 1
@@ -43,6 +43,14 @@ fun getMaxProfessionCountUnspecified(p: MafiaProfession, c: Int): Int = when(p){
         in 0..7 -> 0
         else -> 1
     }
+    COUPLE -> when(c) {
+        in ..8 -> 0
+        else -> 2
+    }
+    POJU -> when(c) -> {
+        in ..9 -> 0
+        else -> 1
+    } 
     else -> -1
 }
 
@@ -53,7 +61,8 @@ fun Player?.isInnocent(): Boolean {
         MEDIC,
         POLICE,
         INNOCENT,
-        JUNSEOK
+        JUNSEOK,
+        COUPLE
     ).contains(this.profession)
 }
 
@@ -66,14 +75,13 @@ fun Player?.isPlayer(): Boolean {
     ).contains(this.profession))
 }
 
-fun Player?.isSpecial(): Boolean {
+fun Player?.isSpecial(): Boolean { // 능력 보유 여부
     if(this == null) return false
 
     return arrayOf(
         MEDIC,
         POLICE,
-        MAFIA
+        MAFIA,
+        POJU
     ).contains(this.profession)
 }
-
-fun getMaxProfessionCount(p: MafiaProfession, c: Int): Int = getMaxProfessionCountUnspecified(p, c)
