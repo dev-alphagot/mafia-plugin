@@ -71,9 +71,11 @@ class Main : JavaPlugin(), Listener {
 
     private var isPlaying: Boolean = false
 	
-	private var voteSum = 0
+    private var voteSum = 0
 
     private lateinit var gameMainThread: Thread
+	
+    private var couples: Pair<Player, Player>? = null
 
     @EventHandler
     fun onChat(e: AsyncChatEvent) {
@@ -484,8 +486,6 @@ class Main : JavaPlugin(), Listener {
                                 players = server.onlinePlayers.filter { it.profession == MafiaProfession.NONE }
 
                                 if(players.isEmpty()){
-                                    logger.info("asdf")
-
                                     return@forEach
                                 }
                                 else {
@@ -596,8 +596,35 @@ class Main : JavaPlugin(), Listener {
 
                                     // TODO 마이크 관련 기능 추가
                                 }
+                                
+                                
 
                                 if(day > 1){
+                                    if(
+                                        couples != null
+                                    ) {
+                                        if(!couples!!.first.isAlive || !couples!!.second.isAlive){
+                                            server.broadcast(
+                                                text(
+                                                    "어젯밤 사랑하는 연인을 잃은 "
+                                                )
+                                                .append(
+                                                    couples!!.toList().first { it.isAlive }.displayName()
+                                                )
+                                                .append(
+                                                    Component.text("님이 오늘 아침 사망한 상태로 발견되었습니다.")
+                                                )
+                                            )
+                                        }
+                                        
+                                        if(!couples!!.first.isAlive) {
+                                                couples!!.second.isAlive = false
+                                        }
+                                        else {
+                                            couples!!.first.isAlive = false
+                                        }
+                                    }
+                                    
                                     val woowoowoo = targetMap[MafiaProfession.POLICE]?.random()
 
                                     if(woowoowoo != null) {
