@@ -597,7 +597,14 @@ class Main : JavaPlugin(), Listener {
                                     // TODO 마이크 관련 기능 추가
                                 }
                                 
-                                
+                                if(Random.nextInt(0, 100) < 4) {
+					                if(couples != null){
+                                        val aids = couples!!.toList().random()
+                                        
+                                        aids.isAIDS = true
+                                        aids.sendMessage(text("${if(isOnStream) "" else ""}병에 걸렸습니다. 의사의 치료를 받지 않을 경우 이틀 후에 사망합니다."))
+                                    }
+			                	}
 
                                 if(day > 1){
                                     if(
