@@ -8,6 +8,7 @@ import java.util.*
 
 private val playerProfessionStorage: MutableMap<UUID, MafiaProfession> = mutableMapOf()
 private val playerAliveStorage: MutableMap<UUID, Boolean> = mutableMapOf()
+private val playerAIDSStorage: MutableMap<UUID, Boolean> = mutableMapOf()
 
 fun getInstance() = Main.instance
 
@@ -27,6 +28,14 @@ var Player.isAlive: Boolean
         playerAliveStorage[this.uniqueId] = value
     }
 
+var Player.isAIDS: Boolean
+    get() {
+        return playerAIDSStorage[this.uniqueId] ?: false
+    }
+    set(value) {
+        playerAIDSStorage[this.uniqueId] = value
+    }
+
 fun getMaxProfessionCount(p: MafiaProfession, c: Int): Int = when(p){
     MAFIA -> {
         when(c){
@@ -44,13 +53,13 @@ fun getMaxProfessionCount(p: MafiaProfession, c: Int): Int = when(p){
         else -> 1
     }
     COUPLE -> when(c) {
-        in ..8 -> 0
+        in 0..8 -> 0
         else -> 2
     }
-    POJU -> when(c) -> {
-        in ..9 -> 0
+    POJU -> /* when(c) {
+        in 0..9 -> 0
         else -> 1
-    } 
+    } */ 0
     else -> -1
 }
 

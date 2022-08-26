@@ -33,11 +33,12 @@ import org.bukkit.event.inventory.InventoryClickEvent
 import org.bukkit.inventory.ItemStack
 import org.bukkit.plugin.java.JavaPlugin
 import org.bukkit.scheduler.BukkitRunnable
+import kotlin.random.Random
 import java.io.File
 import java.time.Duration
 import java.util.*
 import java.util.function.Consumer
-import kotlin.Comparator
+import kotlin.random.nextInt
 
 @Suppress("ControlFlowWithEmptyBody")
 class Main : JavaPlugin(), Listener {
@@ -75,7 +76,7 @@ class Main : JavaPlugin(), Listener {
 
     private lateinit var gameMainThread: Thread
 	
-    private var couples: Pair<Player, Player>? = null
+    private var couples: Pair<Pair<Player, Int>, Pair<Player, Int>>? = null
 
     @EventHandler
     fun onChat(e: AsyncChatEvent) {
@@ -153,10 +154,17 @@ class Main : JavaPlugin(), Listener {
             else {
                 if(isNight) {
                     e.isCancelled = true
+
+                    e.message(Component.text(" (${day}일차 밤): ").append(e.originalMessage()))
+
+                    server.onlinePlayers.filter { it.profession == e.player.profession && e.player.profession != MafiaProfession.INNOCENT }.forEach {
+                        it.sendMessage(e.message())
+                    }
+
                     return
                 }
                 else {
-                    e.message(Component.text(" (${day}일차): ").append(e.originalMessage()))
+                    e.message(Component.text(" (${day}일차 낮): ").append(e.originalMessage()))
                 }
             }
         }
@@ -283,7 +291,7 @@ class Main : JavaPlugin(), Listener {
                                 text("").append(cmd("/mafia")).append(Component.text(": 버전 및 개발자를 볼 수 있습니다.")),
                                 text("+  ").append(cmd("help")).append(Component.text(": 도움말을 볼 수 있습니다.")),
                                 text("+  ").append(cmd("conf-gui")).append(Component.text(": 게임 설정 GUI를 띄웁니다.")),
-                                text("+  ").append(cmd("start")).append(Component.text(": 게임을 시작합니다.\n"))
+                                text("+  ").append(cmd("start")).append(Component.text(": 게임을 시작합니다."))
                             )
                         }
                         else {
@@ -528,7 +536,7 @@ class Main : JavaPlugin(), Listener {
 
                         var fl = false
 
-                        MafiaProfession.values().filter { it != MafiaProfession.NONE && it != MafiaProfession.OBSERVER && it != MafiaProfession.INNOCENT && it != MafiaProfession.JUNSEOK }.forEach { prof ->
+                        MafiaProfession.values().filter { it != MafiaProfession.NONE && it != MafiaProfession.OBSERVER && it != MafiaProfession.INNOCENT && it != MafiaProfession.JUNSEOK && it != MafiaProfession.COUPLE }.forEach { prof ->
                             server.onlinePlayers.filter { it.profession == prof }.forEach { pl ->
                                 pl.sendMessage(
                                     text("당신의 동료는 ")
@@ -557,6 +565,25 @@ class Main : JavaPlugin(), Listener {
                                         .append(Component.text(if(fl) "없습니다." else "님입니다."))
                                 )
                             }
+                        }
+
+                        val _couple = server.onlinePlayers.filter { it.profession == MafiaProfession.COUPLE }
+                        if(_couple.isNotEmpty()){
+                            couples = Pair(Pair(_couple[0], 2), Pair(_couple[1], 2))
+                        }
+
+                        _couple.forEach {
+                            it.sendMessage(
+                                text(
+                                    "당신의 연인은 "
+                                )
+                                    .append(
+                                        (if(it == _couple[0]) _couple[1] else _couple[0]).displayName()
+                                    )
+                                    .append(
+                                        Component.text("님입니다.")
+                                    )
+                            )
                         }
 
                         day = 0
@@ -597,12 +624,12 @@ class Main : JavaPlugin(), Listener {
                                     // TODO 마이크 관련 기능 추가
                                 }
                                 
-                                if(Random.nextInt(0, 100) < 4) {
+                                if(Random.nextInt(0, 100) < 22) {
 					                if(couples != null){
-                                        val aids = couples!!.toList().random()
+                                        val aids = couples!!.toList().random().first
                                         
                                         aids.isAIDS = true
-                                        aids.sendMessage(text("${if(isOnStream) "" else ""}병에 걸렸습니다. 의사의 치료를 받지 않을 경우 이틀 후에 사망합니다."))
+                                        aids.sendMessage(text("${if(isOnStream) "" else "성"}병에 걸렸습니다. 의사의 치료를 받지 않을 경우 이틀 후에 사망합니다."))
                                     }
 			                	}
 
@@ -610,13 +637,13 @@ class Main : JavaPlugin(), Listener {
                                     if(
                                         couples != null
                                     ) {
-                                        if(!couples!!.first.isAlive || !couples!!.second.isAlive){
+                                        if(!couples!!.first.first.isAlive || !couples!!.second.first.isAlive){
                                             server.broadcast(
                                                 text(
                                                     "어젯밤 사랑하는 연인을 잃은 "
                                                 )
                                                 .append(
-                                                    couples!!.toList().first { it.isAlive }.displayName()
+                                                    couples!!.toList().first { it.first.isAlive }.first.displayName()
                                                 )
                                                 .append(
                                                     Component.text("님이 오늘 아침 사망한 상태로 발견되었습니다.")
@@ -624,11 +651,11 @@ class Main : JavaPlugin(), Listener {
                                             )
                                         }
                                         
-                                        if(!couples!!.first.isAlive) {
-                                                couples!!.second.isAlive = false
+                                        if(!couples!!.first.first.isAlive) {
+                                                couples!!.second.first.isAlive = false
                                         }
                                         else {
-                                            couples!!.first.isAlive = false
+                                            couples!!.first.first.isAlive = false
                                         }
                                     }
                                     
@@ -648,7 +675,7 @@ class Main : JavaPlugin(), Listener {
                                     }
 
                                     val willDead = targetMap[MafiaProfession.MAFIA]?.random()
-                                    val willCured = targetMap[MafiaProfession.MEDIC]?.random()
+                                    var willCured = targetMap[MafiaProfession.MEDIC]?.random()
 
                                     if(willDead != null){
                                         if(willCured != null){
@@ -672,6 +699,8 @@ class Main : JavaPlugin(), Listener {
 
                                                 server.getPlayer(willDead)!!.isAlive = false
                                             }
+
+                                            willCured = null
                                         }
                                         else {
                                             server.broadcast(
@@ -685,6 +714,25 @@ class Main : JavaPlugin(), Listener {
                                             }
 
                                             server.getPlayer(willDead)!!.isAlive = false
+                                        }
+                                    }
+
+                                    if(willCured != null) {
+                                        if(server.getPlayer(willCured)!!.isAIDS) {
+                                            server.getPlayer(willCured)!!.isAIDS = false
+
+                                            if(couples!!.first.first.uniqueId == willCured){
+                                                couples = Pair(Pair(couples!!.second.first, 2), couples!!.second)
+                                            }
+                                            else {
+                                                couples = Pair(couples!!.first, Pair(couples!!.second.first, 2))
+                                            }
+
+                                            server.broadcast(
+                                                text("의사가 ")
+                                                    .append(server.getPlayer(willCured)!!.displayName())
+                                                    .append(Component.text("님의 ${if (isOnStream) "" else "성"}병을 치료했습니다."))
+                                            )
                                         }
                                     }
                                 }
